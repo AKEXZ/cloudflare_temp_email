@@ -53,9 +53,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
       },
       manifest: {
-        name: 'Temp Email',
+        name: '临时邮箱',
         short_name: 'Temp Email',
-        description: 'Temp Email - Temporary Email',
+        description: '临时邮箱 - Temp Email || AKE小站 - www.ak0.cn',
         theme_color: '#ffffff',
         icons: [
           {
