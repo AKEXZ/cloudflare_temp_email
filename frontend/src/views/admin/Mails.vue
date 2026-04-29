@@ -1,34 +1,20 @@
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useI18n } from 'vue-i18n'
+import { ref, onMounted, watch } from 'vue';
+import { useScopedI18n } from '@/i18n/app'
 
 import { useGlobalState } from '../../store'
 import { api } from '../../api'
 import MailBox from '../../components/MailBox.vue';
 
-const {
-    localeCache, adminAuth, showAdminAuth,
-    adminMailTabAddress
-} = useGlobalState()
+const { adminMailTabAddress } = useGlobalState()
 
-const { t } = useI18n({
-    locale: localeCache.value || 'zh',
-    messages: {
-        en: {
-            addressQueryTip: 'Leave blank to query all addresses',
-            query: 'Query',
-        },
-        zh: {
-            addressQueryTip: '留空查询所有地址',
-            query: '查询',
-        }
-    }
-});
+const { t } = useScopedI18n('views.admin.Mails')
 
 const mailBoxKey = ref("")
 
-const queryAddress = () => {
-    mailBoxKey.value = adminMailTabAddress.value;
+const queryMail = () => {
+    adminMailTabAddress.value = adminMailTabAddress.value.trim();
+    mailBoxKey.value = Date.now();
 }
 
 const fetchMailData = async (limit, offset) => {
@@ -40,22 +26,22 @@ const fetchMailData = async (limit, offset) => {
     );
 }
 
-onMounted(async () => {
-    if (!adminAuth.value) {
-        showAdminAuth.value = true;
-        return;
-    }
-})
+const deleteMail = async (curMailId) => {
+    await api.fetch(`/admin/mails/${curMailId}`, { method: 'DELETE' });
+};
 </script>
 
 <template>
-    <div>
+    <div style="margin-top: 10px;">
         <n-input-group>
-            <n-input v-model:value="adminMailTabAddress" :placeholder="t('addressQueryTip')" />
-            <n-button @click="queryAddress" type="primary" ghost>
+            <n-input v-model:value="adminMailTabAddress" :placeholder="t('addressQueryTip')"
+                @keydown.enter="queryMail" clearable />
+            <n-button @click="queryMail" type="primary" tertiary>
                 {{ t('query') }}
             </n-button>
         </n-input-group>
-        <MailBox :key="mailBoxKey" :enableUserDeleteEmail="false" :fetchMailData="fetchMailData" />
+        <div style="margin-top: 10px;"></div>
+        <MailBox :key="mailBoxKey" :enableUserDeleteEmail="true" :fetchMailData="fetchMailData"
+            :deleteMail="deleteMail" :showFilterInput="true" />
     </div>
 </template>

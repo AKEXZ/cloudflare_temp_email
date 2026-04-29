@@ -1,11 +1,6 @@
 <script setup>
-import { onMounted } from 'vue';
-
-import { useGlobalState } from '../../store'
 import { api } from '../../api'
 import MailBox from '../../components/MailBox.vue';
-
-const { adminAuth, showAdminAuth } = useGlobalState()
 
 const fetchMailUnknowData = async (limit, offset) => {
     return await api.fetch(
@@ -15,16 +10,13 @@ const fetchMailUnknowData = async (limit, offset) => {
     );
 }
 
-onMounted(async () => {
-    if (!adminAuth.value) {
-        showAdminAuth.value = true;
-        return;
-    }
-})
+const deleteMail = async (curMailId) => {
+    await api.fetch(`/admin/mails/${curMailId}`, { method: 'DELETE' });
+};
 </script>
 
 <template>
-    <div v-if="adminAuth">
-        <MailBox :enableUserDeleteEmail="false" :fetchMailData="fetchMailUnknowData" />
+    <div style="margin-top: 10px;">
+        <MailBox :enableUserDeleteEmail="true" :fetchMailData="fetchMailUnknowData" :deleteMail="deleteMail" />
     </div>
 </template>

@@ -1,51 +1,32 @@
 <script setup>
-import { ref, h, onMounted, watch } from 'vue';
-import { useI18n } from 'vue-i18n'
-import { CleaningServicesFilled } from '@vicons/material'
+import { ref, onMounted } from 'vue';
+import { useScopedI18n } from '@/i18n/app'
+import { CleaningServicesFilled, AddFilled, DeleteFilled } from '@vicons/material'
 
 import { useGlobalState } from '../../store'
 import { api } from '../../api'
 
-const { localeCache, adminAuth, showAdminAuth } = useGlobalState()
+const { loading } = useGlobalState()
 const message = useMessage()
 const cleanupModel = ref({
     enableMailsAutoCleanup: false,
     cleanMailsDays: 30,
     enableUnknowMailsAutoCleanup: false,
     cleanUnknowMailsDays: 30,
-    enableAddressAutoCleanup: false,
-    cleanAddressDays: 30,
     enableSendBoxAutoCleanup: false,
     cleanSendBoxDays: 30,
+    enableAddressAutoCleanup: false,
+    cleanAddressDays: 30,
+    enableInactiveAddressAutoCleanup: false,
+    cleanInactiveAddressDays: 30,
+    enableUnboundAddressAutoCleanup: false,
+    cleanUnboundAddressDays: 30,
+    enableEmptyAddressAutoCleanup: false,
+    cleanEmptyAddressDays: 30,
+    customSqlCleanupList: []
 })
 
-const { t } = useI18n({
-    locale: localeCache.value || 'zh',
-    messages: {
-        en: {
-            tip: 'Please input the cleanup days',
-            mailBoxLabel: 'Clean up days for mailbox',
-            mailUnknowLabel: "Clean up days for unknow receiver",
-            addressUnActiveLabel: "Clean up days for unactive address",
-            sendBoxLabel: "Clean up days for sendbox",
-            cleanupNow: "Cleanup now",
-            autoCleanup: "Auto cleanup",
-            cleanupSuccess: "Cleanup success",
-            save: "Save",
-        },
-        zh: {
-            tip: '请输入清理天数',
-            mailBoxLabel: '收件箱清理天数',
-            mailUnknowLabel: "无收件人邮件清理天数",
-            addressUnActiveLabel: "未活跃地址清理天数",
-            sendBoxLabel: "发件箱清理天数",
-            autoCleanup: "自动清理",
-            cleanupSuccess: "清理成功",
-            cleanupNow: "立即清理",
-            save: "保存",
-        }
-    }
-});
+const { t } = useScopedI18n('views.admin.Maintenance')
 
 const cleanup = async (cleanType, cleanDays) => {
     try {
@@ -59,10 +40,29 @@ const cleanup = async (cleanType, cleanDays) => {
     }
 }
 
+const addCustomSql = () => {
+    if (!cleanupModel.value.customSqlCleanupList) {
+        cleanupModel.value.customSqlCleanupList = [];
+    }
+    cleanupModel.value.customSqlCleanupList.push({
+        id: Date.now().toString(),
+        name: '',
+        sql: '',
+        enabled: false
+    });
+}
+
+const removeCustomSql = (index) => {
+    cleanupModel.value.customSqlCleanupList.splice(index, 1);
+}
+
 const fetchData = async () => {
     try {
         const res = await api.fetch('/admin/auto_cleanup');
         if (res) Object.assign(cleanupModel.value, res);
+        if (!cleanupModel.value.customSqlCleanupList) {
+            cleanupModel.value.customSqlCleanupList = [];
+        }
     } catch (error) {
         message.error(error.message || "error");
     }
@@ -74,17 +74,13 @@ const save = async () => {
             method: 'POST',
             body: JSON.stringify(cleanupModel.value)
         });
-        message.success(t('cleanupSuccess'));
+        message.success(t('saveSuccess'));
     } catch (error) {
         message.error(error.message || "error");
     }
 }
 
 onMounted(async () => {
-    if (!adminAuth.value) {
-        showAdminAuth.value = true;
-        return;
-    }
     await fetchData();
 })
 </script>
@@ -92,60 +88,141 @@ onMounted(async () => {
 
 <template>
     <div class="center">
-        <n-card>
-            <n-form :model="cleanupModel">
-                <n-form-item-row :label="t('mailBoxLabel')">
-                    <n-checkbox v-model:checked="cleanupModel.enableMailsAutoCleanup">
-                        {{ t('autoCleanup') }}
-                    </n-checkbox>
-                    <n-input-number v-model:value="cleanupModel.cleanMailsDays" :placeholder="t('tip')" />
-                    <n-button @click="cleanup('mails', cleanupModel.cleanMailsDays)">
-                        <template #icon>
-                            <n-icon :component="CleaningServicesFilled" />
-                        </template>
-                        {{ t('cleanupNow') }}
-                    </n-button>
-                </n-form-item-row>
-                <n-form-item-row :label="t('mailUnknowLabel')">
-                    <n-checkbox v-model:checked="cleanupModel.enableUnknowMailsAutoCleanup">
-                        {{ t('autoCleanup') }}
-                    </n-checkbox>
-                    <n-input-number v-model:value="cleanupModel.cleanUnknowMailsDays" :placeholder="t('tip')" />
-                    <n-button @click="cleanup('mails_unknow', cleanupModel.cleanUnknowMailsDays)">
-                        <template #icon>
-                            <n-icon :component="CleaningServicesFilled" />
-                        </template>
-                        {{ t('cleanupNow') }}
-                    </n-button>
-                </n-form-item-row>
-                <n-form-item-row :label="t('addressUnActiveLabel')">
-                    <n-checkbox v-model:checked="cleanupModel.enableAddressAutoCleanup">
-                        {{ t('autoCleanup') }}
-                    </n-checkbox>
-                    <n-input-number v-model:value="cleanupModel.cleanAddressDays" :placeholder="t('tip')" />
-                    <n-button @click="cleanup('address', cleanupModel.cleanAddressDays)">
-                        <template #icon>
-                            <n-icon :component="CleaningServicesFilled" />
-                        </template>
-                        {{ t('cleanupNow') }}
-                    </n-button>
-                </n-form-item-row>
-                <n-form-item-row :label="t('mailBoxLabel')">
-                    <n-checkbox v-model:checked="cleanupModel.enableSendBoxAutoCleanup">
-                        {{ t('autoCleanup') }}
-                    </n-checkbox>
-                    <n-input-number v-model:value="cleanupModel.cleanSendBoxDays" :placeholder="t('tip')" />
-                    <n-button @click="cleanup('sendbox', cleanupModel.cleanSendBoxDays)">
-                        <template #icon>
-                            <n-icon :component="CleaningServicesFilled" />
-                        </template>
-                        {{ t('cleanupNow') }}
-                    </n-button>
-                </n-form-item-row>
-                <n-button @click="save" type="primary" block :loading="loading">
+        <n-card :bordered="false" embedded>
+            <n-alert :show-icon="false" :bordered="false" type="warning">
+                <span>{{ t('cronTip') }}</span>
+            </n-alert>
+            <n-flex justify="end">
+                <n-button @click="save" type="primary" :loading="loading">
                     {{ t('save') }}
                 </n-button>
-            </n-form>
+            </n-flex>
+            <n-tabs type="segment" style="margin-top: 16px;">
+                <n-tab-pane name="basic" :tab="t('basicCleanup')">
+                    <n-form :model="cleanupModel">
+                        <n-form-item-row :label="t('mailBoxLabel')">
+                            <n-checkbox v-model:checked="cleanupModel.enableMailsAutoCleanup">
+                                {{ t('autoCleanup') }}
+                            </n-checkbox>
+                            <n-input-number v-model:value="cleanupModel.cleanMailsDays" :placeholder="t('tip')" />
+                            <n-button @click="cleanup('mails', cleanupModel.cleanMailsDays)">
+                                <template #icon>
+                                    <n-icon :component="CleaningServicesFilled" />
+                                </template>
+                                {{ t('cleanupNow') }}
+                            </n-button>
+                        </n-form-item-row>
+                        <n-form-item-row :label="t('mailUnknowLabel')">
+                            <n-checkbox v-model:checked="cleanupModel.enableUnknowMailsAutoCleanup">
+                                {{ t('autoCleanup') }}
+                            </n-checkbox>
+                            <n-input-number v-model:value="cleanupModel.cleanUnknowMailsDays" :placeholder="t('tip')" />
+                            <n-button @click="cleanup('mails_unknow', cleanupModel.cleanUnknowMailsDays)">
+                                <template #icon>
+                                    <n-icon :component="CleaningServicesFilled" />
+                                </template>
+                                {{ t('cleanupNow') }}
+                            </n-button>
+                        </n-form-item-row>
+                        <n-form-item-row :label="t('sendBoxLabel')">
+                            <n-checkbox v-model:checked="cleanupModel.enableSendBoxAutoCleanup">
+                                {{ t('autoCleanup') }}
+                            </n-checkbox>
+                            <n-input-number v-model:value="cleanupModel.cleanSendBoxDays" :placeholder="t('tip')" />
+                            <n-button @click="cleanup('sendbox', cleanupModel.cleanSendBoxDays)">
+                                <template #icon>
+                                    <n-icon :component="CleaningServicesFilled" />
+                                </template>
+                                {{ t('cleanupNow') }}
+                            </n-button>
+                        </n-form-item-row>
+                        <n-form-item-row :label="t('addressCreateLabel')">
+                            <n-checkbox v-model:checked="cleanupModel.enableAddressAutoCleanup">
+                                {{ t('autoCleanup') }}
+                            </n-checkbox>
+                            <n-input-number v-model:value="cleanupModel.cleanAddressDays" :placeholder="t('tip')" />
+                            <n-button @click="cleanup('addressCreated', cleanupModel.cleanAddressDays)">
+                                <template #icon>
+                                    <n-icon :component="CleaningServicesFilled" />
+                                </template>
+                                {{ t('cleanupNow') }}
+                            </n-button>
+                        </n-form-item-row>
+                        <n-form-item-row :label="t('inactiveAddressLabel')">
+                            <n-checkbox v-model:checked="cleanupModel.enableInactiveAddressAutoCleanup">
+                                {{ t('autoCleanup') }}
+                            </n-checkbox>
+                            <n-input-number v-model:value="cleanupModel.cleanInactiveAddressDays" :placeholder="t('tip')" />
+                            <n-button @click="cleanup('inactiveAddress', cleanupModel.cleanInactiveAddressDays)">
+                                <template #icon>
+                                    <n-icon :component="CleaningServicesFilled" />
+                                </template>
+                                {{ t('cleanupNow') }}
+                            </n-button>
+                        </n-form-item-row>
+                        <n-form-item-row :label="t('unboundAddressLabel')">
+                            <n-checkbox v-model:checked="cleanupModel.enableUnboundAddressAutoCleanup">
+                                {{ t('autoCleanup') }}
+                            </n-checkbox>
+                            <n-input-number v-model:value="cleanupModel.cleanUnboundAddressDays" :placeholder="t('tip')" />
+                            <n-button @click="cleanup('unboundAddress', cleanupModel.cleanUnboundAddressDays)">
+                                <template #icon>
+                                    <n-icon :component="CleaningServicesFilled" />
+                                </template>
+                                {{ t('cleanupNow') }}
+                            </n-button>
+                        </n-form-item-row>
+                        <n-form-item-row :label="t('emptyAddressLabel')">
+                            <n-checkbox v-model:checked="cleanupModel.enableEmptyAddressAutoCleanup">
+                                {{ t('autoCleanup') }}
+                            </n-checkbox>
+                            <n-input-number v-model:value="cleanupModel.cleanEmptyAddressDays" :placeholder="t('tip')" />
+                            <n-button @click="cleanup('emptyAddress', cleanupModel.cleanEmptyAddressDays)">
+                                <template #icon>
+                                    <n-icon :component="CleaningServicesFilled" />
+                                </template>
+                                {{ t('cleanupNow') }}
+                            </n-button>
+                        </n-form-item-row>
+                    </n-form>
+                </n-tab-pane>
+                <n-tab-pane name="custom_sql" :tab="t('customSqlCleanup')">
+                    <n-alert :show-icon="false" :bordered="false" type="info" style="margin-bottom: 16px;">
+                        <span>{{ t('customSqlTip') }}</span>
+                    </n-alert>
+                    <n-space vertical>
+                        <n-card v-for="(item, index) in cleanupModel.customSqlCleanupList" :key="item.id" size="small">
+                            <n-space vertical>
+                                <n-space align="center">
+                                    <n-checkbox v-model:checked="item.enabled">
+                                        {{ t('autoCleanup') }}
+                                    </n-checkbox>
+                                    <n-input v-model:value="item.name" :placeholder="t('sqlNamePlaceholder')" style="width: 200px;" />
+                                    <n-button @click="removeCustomSql(index)" type="error" quaternary>
+                                        <template #icon>
+                                            <n-icon :component="DeleteFilled" />
+                                        </template>
+                                        {{ t('deleteCustomSql') }}
+                                    </n-button>
+                                </n-space>
+                                <n-input
+                                    v-model:value="item.sql"
+                                    type="textarea"
+                                    :placeholder="t('sqlPlaceholder')"
+                                    :autosize="{ minRows: 2 }"
+                                    class="sql-input"
+                                />
+                            </n-space>
+                        </n-card>
+                        <n-button @click="addCustomSql">
+                            <template #icon>
+                                <n-icon :component="AddFilled" />
+                            </template>
+                            {{ t('addCustomSql') }}
+                        </n-button>
+                    </n-space>
+                </n-tab-pane>
+            </n-tabs>
         </n-card>
     </div>
 </template>
@@ -162,8 +239,11 @@ onMounted(async () => {
     justify-content: center;
 }
 
-.item {
-    display: flex;
-    margin: 10px;
+.n-alert {
+    margin-bottom: 20px;
+}
+
+.sql-input {
+    text-align: left;
 }
 </style>

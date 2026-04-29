@@ -35,10 +35,31 @@ impl AttachmentResult {
     }
 }
 
+#[derive(Clone)]
+#[wasm_bindgen]
+pub struct MessageHeader {
+    key: String,
+    value: String,
+}
+
+#[wasm_bindgen]
+impl MessageHeader {
+    #[wasm_bindgen(getter)]
+    pub fn key(&self) -> String {
+        self.key.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn value(&self) -> String {
+        self.value.clone()
+    }
+}
+
 #[wasm_bindgen]
 pub struct MessageResult {
     sender: String,
     subject: String,
+    headers: Vec<MessageHeader>,
     body_html: String,
     text: String,
     attachments: Vec<AttachmentResult>,
@@ -54,6 +75,11 @@ impl MessageResult {
     #[wasm_bindgen(getter)]
     pub fn subject(&self) -> String {
         self.subject.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn headers(&self) -> Vec<MessageHeader> {
+        self.headers.clone()
     }
 
     #[wasm_bindgen(getter)]
@@ -75,38 +101,29 @@ impl MessageResult {
 pub fn parse_attachment(message: &mail_parser::Message) -> Vec<AttachmentResult> {
     let mut attachments: Vec<AttachmentResult> = Vec::new();
     for attachment in message.attachments() {
-        if !attachment.is_message() {
-            attachments.push(AttachmentResult {
-                content_id: attachment
-                    .content_id()
-                    .map(|id| id.to_owned())
-                    .unwrap_or(String::new()),
-                content_type: attachment
-                    .content_type()
-                    .map(|ct| {
-                        let c_type = ct.c_type.clone().into_owned();
-                        let c_subtype = ct.c_subtype.clone();
-                        if c_subtype.is_none() {
-                            return c_type;
-                        } else {
-                            return format!("{}/{}", c_type, c_subtype.unwrap());
-                        }
-                    })
-                    .unwrap_or(String::new()),
-                filename: attachment
-                    .attachment_name()
-                    .map(|name| name.to_owned())
-                    .unwrap_or(String::new()),
-                content: attachment.contents().to_vec(),
-            });
-        } else {
-            attachments.append(
-                &mut attachment
-                    .message()
-                    .map(|msg| parse_attachment(msg))
-                    .unwrap_or(Vec::new()),
-            );
-        }
+        attachments.push(AttachmentResult {
+            content_id: attachment
+                .content_id()
+                .map(|id| id.to_owned())
+                .unwrap_or(String::new()),
+            content_type: attachment
+                .content_type()
+                .map(|ct| {
+                    let c_type = ct.c_type.clone().into_owned();
+                    let c_subtype = ct.c_subtype.clone();
+                    if c_subtype.is_none() {
+                        return c_type;
+                    } else {
+                        return format!("{}/{}", c_type, c_subtype.unwrap());
+                    }
+                })
+                .unwrap_or(String::new()),
+            filename: attachment
+                .attachment_name()
+                .map(|name| name.to_owned())
+                .unwrap_or(String::new()),
+            content: attachment.contents().to_vec(),
+        });
     }
     attachments
 }
@@ -119,6 +136,7 @@ pub fn parse_message(raw_message: &str) -> MessageResult {
         return MessageResult {
             sender: String::new(),
             subject: String::new(),
+            headers: Vec::new(),
             body_html: String::new(),
             text: String::new(),
             attachments: Vec::new(),
@@ -146,6 +164,14 @@ pub fn parse_message(raw_message: &str) -> MessageResult {
             .subject()
             .map(|subject| subject.to_owned())
             .unwrap_or(String::new()),
+        headers: message
+            .headers()
+            .iter()
+            .map(|header| MessageHeader {
+                key: header.name().to_owned(),
+                value: header.value().as_text().unwrap_or("").to_owned(),
+            })
+            .collect(),
         body_html: message
             .body_html(0)
             .map(|html| html.into_owned())

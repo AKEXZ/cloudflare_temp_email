@@ -33,12 +33,16 @@ git clone https://github.com/dreamhunter2333/cloudflare_temp_email.git
 
 ```bash
 # create a database, and copy the output to wrangler.toml in the next step
-wrangler d1 create dev
-wrangler d1 execute dev --file=db/schema.sql
+wrangler d1 create temp-email-db
+wrangler d1 execute temp-email-db --file=db/schema.sql --remote
 # schema update, if you have initialized the database before this date, you can execute this command to update
-# wrangler d1 execute dev --file=db/2024-01-13-patch.sql
-# wrangler d1 execute dev --file=db/2024-04-03-patch.sql
+# wrangler d1 execute temp-email-db --file=db/2024-01-13-patch.sql --remote
+# wrangler d1 execute temp-email-db --file=db/2024-04-03-patch.sql --remote
+# create a namespace, and copy the output to wrangler.toml in the next step
+wrangler kv:namespace create DEV
 ```
+
+Use a D1 database name such as `temp-email-db` or `cloudflare-temp-email-prod`.
 
 ![d1](/readme_assets/d1.png)
 
@@ -58,46 +62,102 @@ pnpm run deploy
 
 ```toml
 name = "cloudflare_temp_email"
-main = "src/worker.js"
-compatibility_date = "2023-08-14"
-node_compat = true
+main = "src/worker.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = [ "nodejs_compat" ]
 
 # enable cron if you want set auto clean up
 # [triggers]
 # crons = [ "0 0 * * *" ]
 
+# send mail by cf mail
+# send_email = [
+#    { name = "SEND_MAIL" },
+# ]
+
 [vars]
+# DEFAULT_LANG = "zh"
+# TITLE = "Custom Title" # The title of the site
 PREFIX = "tmp" # The mailbox name prefix to be processed
+# (min, max) length of the adderss, if not set, the default is (1, 30)
+# MIN_ADDRESS_LEN = 1
+# MAX_ADDRESS_LEN = 30
+# ANNOUNCEMENT = "Custom Announcement"
+# always show ANNOUNCEMENT even no changes
+# ALWAYS_SHOW_ANNOUNCEMENT = true
+# address check REGEX, if not set, will not check
+# ADDRESS_CHECK_REGEX = "^(?!.*admin).*"
+# address name replace REGEX, if not set, the default is [^a-z0-9]
+# ADDRESS_REGEX = "[^a-z0-9]"
 # If you want your site to be private, uncomment below and change your password
 # PASSWORDS = ["123", "456"]
 # admin console password, if not configured, access to the console is not allowed
 # ADMIN_PASSWORDS = ["123", "456"]
+# warning: no password or user check for admin portal
+# DISABLE_ADMIN_PASSWORD_CHECK = false
 # admin contact information. If not configured, it will not be displayed. Any string can be configured.
 # ADMIN_CONTACT = "xx@xx.xxx"
-DOMAINS = ["xxx.xxx1" , "xxx.xxx2"] # your domain name
+DEFAULT_DOMAINS = ["xxx.xxx1" , "xxx.xxx2"] # domain name for no role users
+DOMAINS = ["xxx.xxx1" , "xxx.xxx2"] # all your domain name
+# For chinese domain name, you can use DOMAIN_LABELS to show chinese domain name
+# DOMAIN_LABELS = ["中文.xxx", "xxx.xxx2"]
+# USER_DEFAULT_ROLE = "vip" # default role for new users(only when enable mail verification)
+# ADMIN_USER_ROLE = "admin" # the role which can access admin panel
+# User roles configuration, if domains is empty will use default_domains, if prefix is null will use default prefix, if prefix is empty string will not use prefix
+# USER_ROLES = [
+#    { domains = ["xxx.xxx1" , "xxx.xxx2"], role = "vip", prefix = "vip" },
+#    { domains = ["xxx.xxx1" , "xxx.xxx2"], role = "admin", prefix = "" },
+# ]
 JWT_SECRET = "xxx" # Key used to generate jwt
 BLACK_LIST = "" # Blacklist, used to filter senders, comma separated
 # Allow users to create email addresses
 ENABLE_USER_CREATE_EMAIL = true
+# Disable anonymous user create email, if set true, users can only create email addresses after logging in
+# DISABLE_ANONYMOUS_USER_CREATE_EMAIL = true
 # Allow users to delete messages
 ENABLE_USER_DELETE_EMAIL = true
 # Allow automatic replies to emails
 ENABLE_AUTO_REPLY = false
+# Allow webhook
+# ENABLE_WEBHOOK = true
 # Footer text
 # COPYRIGHT = "Dream Hunter"
+# DISABLE_SHOW_GITHUB = true # Disable Show GitHub link
 # default send balance, if not set, it will be 0
 # DEFAULT_SEND_BALANCE = 1
+# the role which can send emails without limit, multiple roles can be separated by ,
+# NO_LIMIT_SEND_ROLE = "vip"
 # Turnstile verification configuration
 # CF_TURNSTILE_SITE_KEY = ""
 # CF_TURNSTILE_SECRET_KEY = ""
-# dkim config
-# DKIM_SELECTOR = "mailchannels" # Refer to the DKIM section mailchannels._domainkey for mailchannels
-# DKIM_PRIVATE_KEY = "" # Refer to the contents of priv_key.txt in the DKIM section
+# telegram bot
+# TG_MAX_ADDRESS = 5
+# telegram bot info, predefined bot info can reduce latency of the webhook
+# TG_BOT_INFO = "{}"
+# global forward address list, if set, all emails will be forwarded to these addresses
+# FORWARD_ADDRESS_LIST = ["xxx@xxx.com"]
+# Frontend URL
+# FRONTEND_URL = "https://xxxx.xxx"
+# Enable check junk mail
+# ENABLE_CHECK_JUNK_MAIL = false
+# junk mail check list, if status exists and status is not pass, will be marked as junk mail
+# JUNK_MAIL_CHECK_LIST = = ["spf", "dkim", "dmarc"]
+# junk mail force check pass list, if no status or status is not pass, will be marked as junk mail
+# JUNK_MAIL_FORCE_PASS_LIST = ["spf", "dkim", "dmarc"]
+# remove attachment if size exceed 2MB, mail maybe mising some information due to parsing
+# REMOVE_EXCEED_SIZE_ATTACHMENT = true
+# remove all attachment, mail maybe mising some information due to parsing
+# REMOVE_ALL_ATTACHMENT = true
 
 [[d1_databases]]
 binding = "DB"
 database_name = "xxx" # D1 database name
 database_id = "xxx" # D1 database ID
+
+# kv config for send email verification code
+# [[kv_namespaces]]
+# binding = "KV"
+# id = "xxxx"
 
 # Create a new address current limiting configuration
 # [[unsafe.bindings]]
@@ -135,39 +195,3 @@ pnpm run deploy
 ```
 
 ![pages](/readme_assets/pages.png)
-
-## Configure sending emails
-
-Find the `SPF` record of `TXT` in the domain name `DNS` record, and add `include:relay.mailchannels.net`
-
-```bash
-v=spf1 include:_spf.mx.cloudflare.net include:relay.mailchannels.net ~all
-```
-
-Create a new `_mailchannels` record, the type is `TXT`, the content is `v=mc1 cfid=your worker domain name`
-
-- The worker domain name here is the domain name of the back-end api. For example, if I deploy it at `https://temp-email-api.awsl.uk/`, fill in `v=mc1 cfid=awsl.uk`
-- If your domain name is `https://temp-email-api.xxx.workers.dev`, fill in `v=mc1 cfid=xxx.workers.dev`
-
-## Configure DKIM
-
-Ref: [Adding-a-DKIM-Signature](https://support.mailchannels.com/hc/en-us/articles/7122849237389-Adding-a-DKIM-Signature)
-
-Creating a DKIM private and public key:
-Private key as PEM file and base64 encoded txt file:
-
-```bash
-openssl genrsa 2048 | tee priv_key.pem | openssl rsa -outform der | openssl base64 -A > priv_key.txt
-```
-
-Public key as DNS record:
-
-```bash
-echo -n "v=DKIM1;p=" > pub_key_record.txt && \
-openssl rsa -in priv_key.pem -pubout -outform der | openssl base64 -A >> pub_key_record.txt
-```
-
-Add `TXT` record in `Cloudflare` all your mail domain `DNS`
-
-- `_dmarc`: `v=DMARC1; p=none; adkim=r; aspf=r;`
-- `mailchannels._domainkey`: `v=DKIM1; p=<content of the file pub_key_record.txt>`
